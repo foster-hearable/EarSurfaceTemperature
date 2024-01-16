@@ -1,0 +1,379 @@
+<!doctype html>
+<!--
+Copyright 2023 Foster Electric Co., Ltd.
+Released under the MIT license
+-->
+<html>
+  <style>
+    .flex {
+        display: -webkit-flex;
+        display: -moz-flex;
+        display: -ms-flex;
+        display: -o-flex;
+        display: flex;
+        gap: 6px 6px;
+    }    
+  </style>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Foster Hearable">
+    <meta name="viewport" content="width=640, maximum-scale=1.0, user-scalable=yes">
+    <title>Foster Hearable</title>
+    <link rel="stylesheet" href="./components/simple.css"> 
+  </head>
+
+<body>
+<div class="container">
+    <h1>Foster Hearable</h1>
+    <p>Temperature</p>
+    <input id="userTemperature" class="input" placeholder="36.0" size="4" type="text"></input>
+    <button id="inputUserTemperature" class="button">Register User Temperature</button>
+    <font id="result"></font>
+
+    <div class="flex" >
+        <canvas id="canvas_1" width="600px" height="350px"></canvas>
+    </div>
+    <br/>
+    <div class="flex" >
+        <button id="startNotifications" class="button">Start Notify</button>
+        <button id="stopNotifications" class="button">Stop Notify</button>
+    </div>
+    <br/>
+    <div class="flex" >
+        <label>WebSocket URL : <input type="text" id="ws_url" size="40" value="ws://127.0.0.1:6301"></label>
+        <button id="WebSocket" class="button">Connect</button>    
+    </div>
+    <div class="code"><pre>
+    <span id="device_name"> </span>
+    <span id="uuid_name"> </span>
+    <span id="status"> </span></pre>
+    </div>
+    <hr>
+    <div class="footer">
+        For more information, see <a href="https://github.com/foster-hearable/Temperature" target="_blank">GitHub</a> !
+    </div>
+</div>
+
+    
+<script type="text/javascript" src="./components/bluejelly.js"></script>
+<script>
+    //--------------------------------------------------
+    //Globals
+    //--------------------------------------------------
+    gStatus   = 0
+    var flgStatus = {
+        'WEAR'  : 1<<0,
+        'TOUCH' : 1<<1,
+        'OPENED': 1<<7,
+    }
+    
+    gTempTb = -1
+    gTempK = -1
+    gTempTi  = -1
+    gTempTo = -1
+
+</script>
+<script>
+    //--------------------------------------------------
+    //Web Bluetooth Wrappers
+    //--------------------------------------------------
+    const ble = new BlueJelly();
+
+    //--------------------------------------------------
+    ble.onScan = function (deviceName) {
+        console.log('onScan() : ' + deviceName)
+        document.getElementById('device_name').innerHTML = deviceName;
+        document.getElementById('status').innerHTML = "found device!";
+
+        gStatus |= flgStatus.OPENED
+    }
+
+    //--------------------------------------------------
+    ble.onConnectGATT = function (uuid) {
+        console.log('> connected GATT!');
+
+        document.getElementById('uuid_name').innerHTML = uuid;
+        document.getElementById('status').innerHTML = "connected GATT!";
+    }
+
+    //--------------------------------------------------
+    ble.onRead = function (data, uuid){
+        var length = data.byteLength;
+        var d = []
+        for (var i=0; i<length; i++){
+            d.push(data.getUint8(i))
+        }
+        console.log(d, uuid)
+
+        document.getElementById('uuid_name').innerHTML = uuid;
+        document.getElementById('status').innerHTML = length + "Bytes received"
+
+        if (uuid == 'TEMPERATURE_DATA') {
+            gTempTb = (d[0] + d[1]*0x100) / 10
+            gTempK = (d[2] + d[3]*0x100) / 1000
+            gTempTi = (d[4] + d[5]*0x100) / 10
+            gTempTo = (d[6] + d[7]*0x100) / 10
+            console.log(gTempTb, gTempK, gTempTi, gTempTo)
+        }
+    }
+
+    //--------------------------------------------------
+    ble.onWrite = function(uuid){
+        console.log('> onWrite! ' + uuid);
+        if (uuid == 'ROLLSWAP') {
+             ble.read('ROLLSWAP');
+            ble.write('DORMANT',   [0x00])
+            ble.startNotify('TEMPERATURE_DATA');
+        }
+        if (uuid == 'TEMPERATURE_VALUE') {
+             ble.read('TEMPERATURE_VALUE');
+         }
+    }
+
+    //--------------------------------------------------
+    ble.onStartNotify = function(uuid){
+        console.log('> Start Notify! ' + uuid);
+
+        document.getElementById('uuid_name').innerHTML = uuid;
+        document.getElementById('status').innerHTML = "started Notify";
+
+        document.getElementById("startNotifications").disabled = true;
+        document.getElementById("stopNotifications").disabled  = false;
+        document.getElementById("userTemperature").disabled  = false;
+        document.getElementById("inputUserTemperature").disabled  = false;
+    }
+
+    //--------------------------------------------------
+    ble.onStopNotify = function(uuid){
+        console.log('> Stop Notify!');
+        gStatus = 0
+
+        document.getElementById('uuid_name').innerHTML = uuid;
+        document.getElementById('status').innerHTML = "stopped Notify";
+
+        document.getElementById("startNotifications").disabled = false;
+        document.getElementById("stopNotifications").disabled  = true;
+        document.getElementById("userTemperature").disabled  = true;
+        document.getElementById("inputUserTemperature").disabled  = true;
+    }
+
+    //-------------------------------------------------
+    robin_init = function() {
+        Object.defineProperty(document, 'ROBIN2_COMMON_SERVICE',  {value: "41001000-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_COMMON_DORMANT',  {value: "41001010-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_COMMON_ROLLSWAP', {value: "41001030-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_SERVICE', {value: "41001300-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_DATA',      {value: "41001301-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_VALUE',      {value: "41001302-0000-1000-8000-00805f9b0230", writable: false});
+
+        //UUIDの設定
+        ble.setUUID("ROLLSWAP",  document.ROBIN2_COMMON_SERVICE, document.ROBIN2_COMMON_ROLLSWAP);
+        ble.setUUID("DORMANT",   document.ROBIN2_COMMON_SERVICE, document.ROBIN2_COMMON_DORMANT);
+        ble.setUUID("TEMPERATURE_DATA", document.ROBIN2_TEMPERATURE_SERVICE, document.ROBIN2_TEMPERATURE_DATA);
+        ble.setUUID("TEMPERATURE_VALUE", document.ROBIN2_TEMPERATURE_SERVICE, document.ROBIN2_TEMPERATURE_VALUE);
+    }
+
+    robin_open = function() {
+        ble.write('ROLLSWAP',  [0x00])
+    }
+
+    robin_close = function() {
+        ble.stopNotify('TEMPERATURE_DATA');
+        clearInterval(timerId);
+        location.reload()
+    }
+
+    temp_register = function() {
+        var userTemp = document.getElementById('userTemperature').value
+        var result = userTemp.match(/^\d{2}.\d{1}$/)
+        if (result != null){
+            var tmp = userTemp*10
+            ble.write('TEMPERATURE_VALUE', [(tmp & 0xFF), (tmp & 0xFF00) >> 8])
+            document.getElementById('userTemperature').value = ""
+            document.getElementById('result').innerHTML = "Registered " + userTemp +"℃"
+        }
+        else {
+            document.getElementById('userTemperature').value = ""
+            document.getElementById('result').innerHTML = "Fotmat is incorrect \"" + userTemp + "\". (ex. \"36.1\")"
+        }
+    }
+
+</script>
+
+<script>
+    //--------------------------------------------------
+    //WebSocket
+    //--------------------------------------------------
+    let wsurl_element = document.getElementById('ws_url');
+    let sock = null
+
+    ws_refresh = function() {
+        if (wsurl_element.disabled) {
+            console.log('WebSocket: Close.');        
+            sock.close()
+        } else {
+            console.log('WebSocket: Reconnect.');        
+            sock = new WebSocket(wsurl_element.value);
+
+            sock.addEventListener('open',function(e){
+                console.log('WebSocket: Connected.');
+                document.getElementById('WebSocket').textContent = "Disconnect"
+                wsurl_element.disabled = true
+
+                window.setInterval(function(){
+                    if ((gStatus & flgStatus.OPENED) && (wsurl_element.disabled)) {
+                        if (gTempTi > 0) {
+                            d = [gTempTb*10, gTempK*1000, gTempTi*10, gTempTo*10]
+                            sock.send(d);
+//                            console.log(d)
+                        }
+                    }
+                }, 1000);
+            });
+            sock.onclose = () => {
+                console.log('WebSocket: Closed.');        
+                document.getElementById('WebSocket').textContent = "Connect"
+                wsurl_element.disabled = false
+            }
+            sock.onmessage = function(e) {
+                console.log(e.data)
+            }
+        }
+    }
+    ws_refresh()
+
+    //--------------------------------------------------
+    // Onload setups and Buttons
+    //--------------------------------------------------
+    window.onload = function () {
+        robin_init();
+        
+        document.getElementById("startNotifications").disabled = false;
+        document.getElementById("stopNotifications").disabled  = true;
+        document.getElementById("userTemperature").disabled  = true;
+        document.getElementById("inputUserTemperature").disabled  = true;
+    }
+
+    document.getElementById('startNotifications').addEventListener('click', function(e) {
+        robin_open();
+    });
+
+    document.getElementById('stopNotifications').addEventListener('click', function() {
+        robin_close();
+    });
+
+    document.getElementById('inputUserTemperature').addEventListener('click', function() {
+        temp_register();
+    });
+
+    document.getElementById('WebSocket').addEventListener('click', function(e) {
+        ws_refresh();
+    });
+</script>
+
+
+<script type="text/javascript" src="./components/chart.min.js"></script>
+<script>
+    //--------------------------------------------------
+    // Charts and PPG singnal processings
+    //--------------------------------------------------
+    var chrt_1 = document.getElementById("canvas_1").getContext("2d");
+    var chartId_1 = new Chart(chrt_1, {
+        type: 'line',
+        data: {
+            labels: Array.from(Array(100).keys()),
+            datasets: [{
+                label: ["Outer [℃]"],
+                data: [],
+                borderColor: 'rgba(255, 100, 100, 1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                yAxisID: 'left-y-axis',
+            },
+            {
+                label: ["Inner [℃]"],
+                data: [],
+                borderColor: 'rgba(0, 250, 154, 1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                yAxisID: 'left-y-axis',
+            },
+            {
+                label: ["CoreBody [℃]"],
+                data: [],
+                borderColor: 'rgba(30, 144, 255, 1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                yAxisID: 'left-y-axis',
+            },
+            {
+                label: ["Temperature Coefficient"],
+                data: [],
+                borderColor: 'rgba(138, 43, 226, 1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                yAxisID: 'right-y-axis',
+            }],
+        },
+        options: {
+            animation: false,
+            responsive: false,
+            plugins: {
+                legend: {
+                    display: true,
+                },
+            },
+            scales: {
+                'left-y-axis': {
+                    position: 'left',
+                    max: 50,
+                    min: 0,
+                    ticks: {
+                        stepSize: 10,
+                        callback: function(value){
+                            return value+'℃';
+                        }
+                    }
+                },
+                'right-y-axis': {
+                    position: 'right',
+                    max: 1,
+                    min: 0,
+                    ticks: {
+                        stepSize: 0.1,
+                    }
+                },
+                'x': {
+                    max: 100,
+                    min:0,
+                    ticks: {
+                        maxTicksLimit: 20,
+                    },
+                }
+            },
+        },
+    });
+
+    //--------------------------------------------------
+    let timerId = setInterval(() => {
+
+        if (gTempTi > 0) {
+            chartId_1.data.datasets[0].data.push(gTempTo);
+            chartId_1.data.datasets[1].data.push(gTempTi);
+            chartId_1.data.datasets[2].data.push(gTempTb);
+            chartId_1.data.datasets[3].data.push(gTempK);
+            if (chartId_1.data.datasets[0].data.length > 100) {
+                chartId_1.data.datasets[0].data.shift()
+                chartId_1.data.datasets[1].data.shift()
+                chartId_1.data.datasets[2].data.shift()
+                chartId_1.data.datasets[3].data.shift()
+            }
+        }
+        chartId_1.update();
+    },1000); //1sec
+
+</script>
+
+</body>
+</html>
