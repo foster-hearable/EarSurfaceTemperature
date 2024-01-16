@@ -305,14 +305,6 @@ Released under the MIT license
                 borderWidth: 2,
                 pointRadius: 0,
                 yAxisID: 'left-y-axis',
-            },
-            {
-                label: ["Temperature Coefficient"],
-                data: [],
-                borderColor: 'rgba(138, 43, 226, 1)',
-                borderWidth: 2,
-                pointRadius: 0,
-                yAxisID: 'right-y-axis',
             }],
         },
         options: {
@@ -335,14 +327,6 @@ Released under the MIT license
                         }
                     }
                 },
-                'right-y-axis': {
-                    position: 'right',
-                    max: 1,
-                    min: 0,
-                    ticks: {
-                        stepSize: 0.1,
-                    }
-                },
                 'x': {
                     max: 100,
                     min:0,
@@ -361,12 +345,10 @@ Released under the MIT license
             chartId_1.data.datasets[0].data.push(gTempTo);
             chartId_1.data.datasets[1].data.push(gTempTi);
             chartId_1.data.datasets[2].data.push(gTempTb);
-            chartId_1.data.datasets[3].data.push(gTempK);
             if (chartId_1.data.datasets[0].data.length > 100) {
                 chartId_1.data.datasets[0].data.shift()
                 chartId_1.data.datasets[1].data.shift()
                 chartId_1.data.datasets[2].data.shift()
-                chartId_1.data.datasets[3].data.shift()
             }
         }
         chartId_1.update();
