@@ -38,10 +38,14 @@ Released under the MIT license
     </div>
     <br/>
     <div class="flex" >
-      <label>Reference Temperature [℃] : <input type="text" id="userTemperature" size="4" class="input" value="36.0"></label>
-      <button id="inputUserTemperature" class="button">Cariblate</button>
-    </div>
-    <div class="flex" >
+        <label>Reference Temperature [℃] : <input type="text" id="userTemperature" size="4" class="input"></label>
+        <button id="inputUserTemperature" class="button">Cariblate</button>
+      </div>
+      <div class="flex" >
+        <label>Temperature Coefficient   : <input type="text" id="tempCoef" size="4" class="input"></label>
+        <button id="inputTempCoef" class="button">Coefficient</button>
+      </div>
+        <div class="flex" >
         <label>WebSocket URL : <input type="text" id="ws_url" size="40" value="ws://127.0.0.1:6301"></label>
         <button id="WebSocket" class="button">Connect</button>    
     </div>
@@ -70,9 +74,11 @@ Released under the MIT license
     }
     
     gTempTb = -1
-    gTempK = -1
-    gTempTi  = -1
+    gTempK  = -1
+    gTempTi = -1
     gTempTo = -1
+    gBodyTemp = -1
+    gTempCoef = -1
 
 </script>
 <script>
@@ -108,14 +114,25 @@ Released under the MIT license
         console.log(d, uuid)
 
         document.getElementById('uuid_name').innerHTML = uuid;
-        document.getElementById('status').innerHTML = length + "Bytes received"
+        document.getElementById('status').innerHTML = "";
 
         if (uuid == 'TEMPERATURE_DATA') {
             gTempTb = (d[0] + d[1]*0x100) / 10
-            gTempK = (d[2] + d[3]*0x100) / 1000
+            gTempK  = (d[2] + d[3]*0x100) / 1000
             gTempTi = (d[4] + d[5]*0x100) / 10
             gTempTo = (d[6] + d[7]*0x100) / 10
             console.log(gTempTb, gTempK, gTempTi, gTempTo)
+            document.getElementById('status').innerHTML = length + "Bytes received"
+        }
+        if (uuid == 'TEMPERATURE_VALUE') {
+            gBodyTemp = (d[0] + d[1]*0x100) / 10
+            console.log(gBodyTemp.toFixed(1))
+            document.getElementById('userTemperature').value = gBodyTemp.toFixed(1)
+        }
+        if (uuid == 'TEMPERATURE_COEF') {
+            gTempCoef = (d[0] + d[1]*0x100) / 1000
+            console.log(gTempCoef.toFixed(3))
+            document.getElementById('tempCoef').value = gTempCoef.toFixed(3)
         }
     }
 
@@ -123,13 +140,11 @@ Released under the MIT license
     ble.onWrite = function(uuid){
         console.log('> onWrite! ' + uuid);
         if (uuid == 'ROLLSWAP') {
-             ble.read('ROLLSWAP');
             ble.write('DORMANT',   [0x00])
             ble.startNotify('TEMPERATURE_DATA');
         }
-        if (uuid == 'TEMPERATURE_VALUE') {
-             ble.read('TEMPERATURE_VALUE');
-         }
+        ble.read('TEMPERATURE_VALUE');
+        ble.read('TEMPERATURE_COEF');
     }
 
     //--------------------------------------------------
@@ -141,7 +156,8 @@ Released under the MIT license
 
         document.getElementById("startNotifications").disabled = true;
         document.getElementById("stopNotifications").disabled  = false;
-        document.getElementById("inputUserTemperature").disabled  = false;
+        document.getElementById("inputUserTemperature").disabled = false;
+        document.getElementById("inputTempCoef").disabled = false;
     }
 
     //--------------------------------------------------
@@ -154,7 +170,8 @@ Released under the MIT license
 
         document.getElementById("startNotifications").disabled = false;
         document.getElementById("stopNotifications").disabled  = true;
-        document.getElementById("inputUserTemperature").disabled  = true;
+        document.getElementById("inputUserTemperature").disabled = true;
+        document.getElementById("inputTempCoef").disabled = true;
     }
 
     //-------------------------------------------------
@@ -163,14 +180,16 @@ Released under the MIT license
         Object.defineProperty(document, 'ROBIN2_COMMON_DORMANT',  {value: "41001010-0000-1000-8000-00805f9b0230", writable: false});
         Object.defineProperty(document, 'ROBIN2_COMMON_ROLLSWAP', {value: "41001030-0000-1000-8000-00805f9b0230", writable: false});
         Object.defineProperty(document, 'ROBIN2_TEMPERATURE_SERVICE', {value: "41001300-0000-1000-8000-00805f9b0230", writable: false});
-        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_DATA',      {value: "41001301-0000-1000-8000-00805f9b0230", writable: false});
-        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_VALUE',      {value: "41001302-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_DATA',    {value: "41001301-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_VALUE',   {value: "41001302-0000-1000-8000-00805f9b0230", writable: false});
+        Object.defineProperty(document, 'ROBIN2_TEMPERATURE_COEF',    {value: "41001303-0000-1000-8000-00805f9b0230", writable: false});
 
         //UUIDの設定
         ble.setUUID("ROLLSWAP",  document.ROBIN2_COMMON_SERVICE, document.ROBIN2_COMMON_ROLLSWAP);
         ble.setUUID("DORMANT",   document.ROBIN2_COMMON_SERVICE, document.ROBIN2_COMMON_DORMANT);
-        ble.setUUID("TEMPERATURE_DATA", document.ROBIN2_TEMPERATURE_SERVICE, document.ROBIN2_TEMPERATURE_DATA);
+        ble.setUUID("TEMPERATURE_DATA",  document.ROBIN2_TEMPERATURE_SERVICE, document.ROBIN2_TEMPERATURE_DATA);
         ble.setUUID("TEMPERATURE_VALUE", document.ROBIN2_TEMPERATURE_SERVICE, document.ROBIN2_TEMPERATURE_VALUE);
+        ble.setUUID("TEMPERATURE_COEF",  document.ROBIN2_TEMPERATURE_SERVICE, document.ROBIN2_TEMPERATURE_COEF);
     }
 
     robin_open = function() {
@@ -185,16 +204,33 @@ Released under the MIT license
 
     temp_register = function() {
         var userTemp = document.getElementById('userTemperature').value
-        var result = userTemp.match(/^\d{2}.\d{1}$/)
+        var result = parseFloat(userTemp)
+        console.log(userTemp, result)
         if (result != null){
             var tmp = userTemp*10
             ble.write('TEMPERATURE_VALUE', [(tmp & 0xFF), (tmp & 0xFF00) >> 8])
             document.getElementById('userTemperature').value = ""
-            document.getElementById('result').innerHTML = "Registered " + userTemp +"℃"
+            document.getElementById('status').innerHTML = "Registered " + userTemp +"℃"
         }
         else {
             document.getElementById('userTemperature').value = ""
-            document.getElementById('result').innerHTML = "Fotmat is incorrect \"" + userTemp + "\". (ex. \"36.1\")"
+            document.getElementById('status').innerHTML = "Fotmat is incorrect \"" + userTemp + "\". (ex. \"36.1\")"
+        }
+    }
+
+    coef_register = function() {
+        var userTemp = document.getElementById('tempCoef').value
+        var result = parseFloat(userTemp)
+        console.log(userTemp, result)
+        if (result != null){
+            var tmp = userTemp*1000
+            ble.write('TEMPERATURE_COEF', [(tmp & 0xFF), (tmp & 0xFF00) >> 8])
+            document.getElementById('tempCoef').value = ""
+            document.getElementById('status').innerHTML = "Registered " + userTemp +"℃"
+        }
+        else {
+            document.getElementById('userTemperature').value = ""
+            document.getElementById('status').innerHTML = "Fotmat is incorrect \"" + userTemp + "\". (ex. \"36.1\")"
         }
     }
 
@@ -250,8 +286,10 @@ Released under the MIT license
         
         document.getElementById("startNotifications").disabled = false;
         document.getElementById("stopNotifications").disabled  = true;
-        document.getElementById("userTemperature").disabled  = false;
-        document.getElementById("inputUserTemperature").disabled  = true;
+        document.getElementById("inputUserTemperature").disabled = true;
+        document.getElementById("inputTempCoef").disabled = true;
+        document.getElementById("userTemperature").disabled = false;
+        document.getElementById("tempCoef").disabled = false;
     }
 
     document.getElementById('startNotifications').addEventListener('click', function(e) {
