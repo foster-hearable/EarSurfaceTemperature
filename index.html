@@ -219,18 +219,18 @@ Released under the MIT license
     }
 
     coef_register = function() {
-        var userTemp = document.getElementById('tempCoef').value
-        var result = parseFloat(userTemp)
-        console.log(userTemp, result)
+        var userCoef = document.getElementById('tempCoef').value
+        var result = parseFloat(userCoef)
+        console.log(userCoef, result)
         if (result != null){
-            var tmp = userTemp*1000
+            var tmp = userCoef*1000
             ble.write('TEMPERATURE_COEF', [(tmp & 0xFF), (tmp & 0xFF00) >> 8])
             document.getElementById('tempCoef').value = ""
-            document.getElementById('status').innerHTML = "Registered " + userTemp +"℃"
+            document.getElementById('status').innerHTML = "Registered " + userCoef
         }
         else {
-            document.getElementById('userTemperature').value = ""
-            document.getElementById('status').innerHTML = "Fotmat is incorrect \"" + userTemp + "\". (ex. \"36.1\")"
+            document.getElementById('tempCoef').value = ""
+            document.getElementById('status').innerHTML = "Fotmat is incorrect \"" + userCoef + "\". (ex. \"1.5\")"
         }
     }
 
@@ -302,6 +302,10 @@ Released under the MIT license
 
     document.getElementById('inputUserTemperature').addEventListener('click', function() {
         temp_register();
+    });
+
+    document.getElementById('inputTempCoef').addEventListener('click', function() {
+        coef_register();
     });
 
     document.getElementById('WebSocket').addEventListener('click', function(e) {
